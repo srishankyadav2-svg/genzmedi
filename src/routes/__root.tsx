@@ -95,6 +95,16 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+  useEffect(() => {
+    import("@/integrations/supabase/client").then(({ supabase }) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+        router.invalidate();
+        queryClient.invalidateQueries();
+      });
+      return () => subscription.unsubscribe();
+    });
+  }, [router, queryClient]);
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />

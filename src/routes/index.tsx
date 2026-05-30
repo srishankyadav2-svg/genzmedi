@@ -1,18 +1,20 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
-import { motion } from "framer-motion";
-import { Eye, EyeOff, HeartPulse, Lock, Mail } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, HeartPulse, Mail, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { toast } from "sonner";
-import { login } from "@/lib/auth";
+import { sendLoginOtp, verifyLoginOtp } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Sign in — GenZ Medi" },
-      { name: "description", content: "Sign in to GenZ Medi to manage your healthcare." },
+      { name: "description", content: "Sign in to GenZ Medi with a secure one-time email code." },
     ],
   }),
   component: LoginPage,
@@ -20,40 +22,84 @@ export const Route = createFileRoute("/")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const [step, setStep] = useState<"email" | "otp">("email");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [show, setShow] = useState(false);
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
 
-  const onSubmit = async (e: FormEvent) => {
+  // If already signed in, jump straight to dashboard.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) navigate({ to: "/dashboard" });
+    });
+  }, [navigate]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((v) => v - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  const validEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
+  const onSendCode = async (e: FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (!validEmail(email)) {
+      toast.error("Please enter a valid email address");
       return;
     }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 700));
-    login();
-    toast.success("Welcome back!");
-    navigate({ to: "/dashboard" });
+    try {
+      await sendLoginOtp(email.trim());
+      toast.success("Verification code sent", { description: `Check ${email} for a 6-digit code.` });
+      setStep("otp");
+      setResendIn(45);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to send code";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const onGoogle = () => {
+  const onVerify = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (code.length !== 6) {
+      toast.error("Enter the 6-digit code");
+      return;
+    }
     setLoading(true);
-    setTimeout(() => {
-      login();
-      toast.success("Signed in with Google");
+    try {
+      await verifyLoginOtp(email.trim(), code);
+      toast.success("Welcome to GenZ Medi!");
       navigate({ to: "/dashboard" });
-    }, 600);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Invalid or expired code";
+      toast.error(msg);
+      setCode("");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onResend = async () => {
+    if (resendIn > 0) return;
+    setLoading(true);
+    try {
+      await sendLoginOtp(email.trim());
+      toast.success("New code sent");
+      setResendIn(45);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to resend code";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-soft p-4">
-      {/* animated medical blobs */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-primary/30 blur-3xl animate-blob" />
         <div className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-secondary/40 blur-3xl animate-blob [animation-delay:-7s]" />
@@ -76,94 +122,124 @@ function LoginPage() {
             >
               <HeartPulse className="h-7 w-7 text-primary-foreground" />
             </motion.div>
-            <h1 className="text-2xl font-bold tracking-tight">Welcome Back to GenZ Medi</h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {step === "email" ? "Welcome to GenZ Medi" : "Verify your email"}
+            </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Sign in to continue your care journey
+              {step === "email"
+                ? "Enter your email and we'll send you a secure 6-digit code."
+                : (
+                  <>We sent a code to <span className="font-medium text-foreground">{email}</span></>
+                )}
             </p>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email or Phone</Label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="text"
-                  autoComplete="username"
-                  placeholder="you@genzmedi.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-9 h-11"
-                />
-              </div>
-            </div>
+          <AnimatePresence mode="wait">
+            {step === "email" ? (
+              <motion.form
+                key="email"
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 16 }}
+                transition={{ duration: 0.2 }}
+                onSubmit={onSendCode}
+                className="space-y-4"
+              >
+                <div className="space-y-1.5">
+                  <Label htmlFor="email">Email address</Label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      placeholder="you@genzmedi.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-9 h-11"
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <button
-                  type="button"
-                  onClick={() => toast.info("Password reset link sent to your email")}
-                  className="text-xs font-medium text-primary hover:underline"
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="h-11 w-full bg-gradient-hero text-primary-foreground shadow-glow transition-transform hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-70"
                 >
-                  Forgot password?
-                </button>
-              </div>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type={show ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-9 pr-10 h-11"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShow((s) => !s)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:bg-muted"
-                  aria-label={show ? "Hide password" : "Show password"}
+                  {loading ? "Sending code..." : "Send verification code"}
+                </Button>
+
+                <p className="flex items-center justify-center gap-1.5 pt-2 text-center text-xs text-muted-foreground">
+                  <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                  Passwordless, secure sign-in. No password needed.
+                </p>
+              </motion.form>
+            ) : (
+              <motion.form
+                key="otp"
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -16 }}
+                transition={{ duration: 0.2 }}
+                onSubmit={onVerify}
+                className="space-y-5"
+              >
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={code}
+                    onChange={(v) => {
+                      setCode(v);
+                      if (v.length === 6) {
+                        // auto-submit
+                        setTimeout(() => onVerify(), 50);
+                      }
+                    }}
+                    disabled={loading}
+                  >
+                    <InputOTPGroup>
+                      {[0, 1, 2, 3, 4, 5].map((i) => (
+                        <InputOTPSlot key={i} index={i} className="h-12 w-11 text-lg" />
+                      ))}
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={loading || code.length !== 6}
+                  className="h-11 w-full bg-gradient-hero text-primary-foreground shadow-glow disabled:opacity-70"
                 >
-                  {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
+                  {loading ? "Verifying..." : "Verify & continue"}
+                </Button>
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="h-11 w-full bg-gradient-hero text-primary-foreground shadow-glow transition-transform hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-70"
-            >
-              {loading ? "Signing in..." : "Sign in"}
-            </Button>
+                <div className="flex items-center justify-between text-xs">
+                  <button
+                    type="button"
+                    onClick={() => { setStep("email"); setCode(""); }}
+                    className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" /> Change email
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onResend}
+                    disabled={resendIn > 0 || loading}
+                    className="font-medium text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+                  >
+                    {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
+                  </button>
+                </div>
+              </motion.form>
+            )}
+          </AnimatePresence>
 
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-card px-2 text-muted-foreground">or continue with</span>
-              </div>
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onGoogle}
-              disabled={loading}
-              className="h-11 w-full gap-2 transition-transform hover:-translate-y-0.5"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.4-1.6 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.3 14.6 2.3 12 2.3 6.7 2.3 2.4 6.6 2.4 12s4.3 9.7 9.6 9.7c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.6H12z"/>
-              </svg>
-              Continue with Google
-            </Button>
-
-            <p className="pt-2 text-center text-xs text-muted-foreground">
-              By continuing you agree to our Terms & Privacy Policy.
-            </p>
-          </form>
+          <p className="pt-5 text-center text-xs text-muted-foreground">
+            By continuing you agree to our Terms & Privacy Policy.
+          </p>
         </div>
       </motion.div>
     </div>

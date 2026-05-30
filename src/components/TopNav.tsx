@@ -14,7 +14,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { logout } from "@/lib/auth";
+import { signOut } from "@/lib/auth";
 import { toast } from "sonner";
 
 export function TopNav() {
@@ -72,8 +72,8 @@ export function TopNav() {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             className="text-destructive focus:text-destructive"
-            onClick={() => {
-              logout();
+            onClick={async () => {
+              await signOut();
               toast.success("Logged out");
               navigate({ to: "/" });
             }}
