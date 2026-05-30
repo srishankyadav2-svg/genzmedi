@@ -1,13 +1,31 @@
-// Simple client-side mock auth for demo. Not for production.
-const KEY = "genzmedi_auth";
+import { supabase } from "@/integrations/supabase/client";
 
-export function isAuthenticated(): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(KEY) === "1";
+export async function sendLoginOtp(email: string) {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: true,
+      emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+    },
+  });
+  if (error) throw error;
 }
-export function login() {
-  localStorage.setItem(KEY, "1");
+
+export async function verifyLoginOtp(email: string, token: string) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: "email",
+  });
+  if (error) throw error;
+  return data;
 }
-export function logout() {
-  localStorage.removeItem(KEY);
+
+export async function signOut() {
+  await supabase.auth.signOut();
+}
+
+export async function getCurrentSession() {
+  const { data } = await supabase.auth.getSession();
+  return data.session;
 }
