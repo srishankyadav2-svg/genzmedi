@@ -8,7 +8,6 @@ import {
   HeartPulse,
   Lock,
   Mail,
-  MessageSquare,
   Phone,
   ShieldCheck,
   User,
@@ -19,13 +18,13 @@ import { Label } from "@/components/ui/label";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { toast } from "sonner";
 import {
-  identifierToAuthEmail,
+  identifierToPhoneNumber,
   isMfaVerified,
   parseIdentifier,
-  requestEmailOtp,
+  requestMobileOtp,
   setMfaVerified,
   signInWithPassword,
-  verifyEmailOtp,
+  verifyMobileOtp,
   type Identifier,
 } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,15 +36,14 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Securely sign in to GenZ Medi with email or mobile, password, and a one-time verification code.",
+          "Securely sign in to GenZ Medi with email or mobile, password, and a one-time verification code sent via SMS.",
       },
     ],
   }),
   component: LoginPage,
 });
 
-type Step = "credentials" | "channel" | "otp";
-type Channel = "email" | "sms";
+type Step = "credentials" | "otp";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -54,8 +52,7 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [identifier, setIdentifier] = useState<Identifier | null>(null);
-  const [authEmail, setAuthEmail] = useState("");
-  const [channel, setChannel] = useState<Channel>("email");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
@@ -88,36 +85,26 @@ function LoginPage() {
     try {
       await signInWithPassword({ identifier: id, password });
       setIdentifier(id);
-      setAuthEmail(identifierToAuthEmail(id));
-      // Default channel based on identifier type
-      setChannel(id.type === "email" ? "email" : "sms");
-      setStep("channel");
+
+      // For mobile OTP, extract the phone number
+      if (id.type === "phone") {
+        setPhoneNumber(id.value);
+        await requestMobileOtp(id.value);
+        toast.success("Verification code sent", {
+          description: id.value,
+        });
+        setStep("otp");
+        setResendIn(45);
+      } else {
+        // Email users - show error since email OTP is deprecated
+        toast.error("Mobile number required", {
+          description: "Please sign in with your mobile number for SMS verification.",
+        });
+        setLoading(false);
+        return;
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Invalid credentials";
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onChooseChannel = async (chosen: Channel) => {
-    if (chosen === "sms") {
-      toast.info("SMS verification isn't set up yet", {
-        description: "Use email OTP for now, or ask your admin to configure an SMS provider.",
-      });
-      return;
-    }
-    setChannel(chosen);
-    setLoading(true);
-    try {
-      await requestEmailOtp(authEmail);
-      toast.success("Verification code sent", {
-        description: identifier?.type === "email" ? identifier.value : authEmail,
-      });
-      setStep("otp");
-      setResendIn(45);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to send code";
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -132,7 +119,7 @@ function LoginPage() {
     }
     setLoading(true);
     try {
-      await verifyEmailOtp(authEmail, code);
+      await verifyMobileOtp(phoneNumber, code);
       setMfaVerified();
       toast.success("Welcome back!");
       navigate({ to: "/dashboard" });
@@ -149,7 +136,7 @@ function LoginPage() {
     if (resendIn > 0) return;
     setLoading(true);
     try {
-      await requestEmailOtp(authEmail);
+      await requestMobileOtp(phoneNumber);
       toast.success("New code sent");
       setResendIn(45);
     } catch (err) {
@@ -169,26 +156,17 @@ function LoginPage() {
       <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
     );
 
-  const heading =
-    step === "credentials"
-      ? "Welcome to GenZ Medi"
-      : step === "channel"
-      ? "Verify it's you"
-      : "Enter your code";
+  const heading = step === "credentials" ? "Welcome to GenZ Medi" : "Enter your code";
 
   const subheading =
     step === "credentials"
-      ? "Sign in with your email or mobile number."
-      : step === "channel"
-      ? "Choose how you'd like to receive your one-time code."
+      ? "Sign in with your mobile number and password."
       : (
-        <>
-          We sent a 6-digit code to{" "}
-          <span className="font-medium text-foreground">
-            {identifier?.type === "email" ? identifier.value : authEmail}
-          </span>
-        </>
-      );
+          <>
+            We sent a 6-digit code to{" "}
+            <span className="font-medium text-foreground">{phoneNumber}</span>
+          </>
+        );
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-soft p-4">
@@ -230,14 +208,15 @@ function LoginPage() {
                 className="space-y-4"
               >
                 <div className="space-y-1.5">
-                  <Label htmlFor="identifier">Email or mobile number</Label>
+                  <Label htmlFor="identifier">Mobile number</Label>
                   <div className="relative">
                     {identifierIcon}
                     <Input
                       id="identifier"
-                      type="text"
-                      autoComplete="username"
-                      placeholder="you@genzmedi.com or +91 98xxxxxxxx"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="+91 98xxxxxxxx"
                       value={identifierRaw}
                       onChange={(e) => setIdentifierRaw(e.target.value)}
                       className="pl-9 h-11"
@@ -245,6 +224,9 @@ function LoginPage() {
                       required
                     />
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Include country code (e.g., +91 for India)
+                  </p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -290,62 +272,9 @@ function LoginPage() {
 
                 <p className="flex items-center justify-center gap-1.5 pt-1 text-center text-xs text-muted-foreground">
                   <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                  Two-step verification keeps your health data safe.
+                  SMS verification keeps your health data safe.
                 </p>
               </motion.form>
-            )}
-
-            {step === "channel" && (
-              <motion.div
-                key="channel"
-                initial={{ opacity: 0, x: 16 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -16 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-3"
-              >
-                <button
-                  type="button"
-                  onClick={() => onChooseChannel("email")}
-                  disabled={loading}
-                  className="group flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:bg-primary/5 disabled:opacity-60"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Mail className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium">Email me a code</div>
-                    <div className="text-xs text-muted-foreground">
-                      {identifier?.type === "email" ? identifier.value : "Sent to your account email"}
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onChooseChannel("sms")}
-                  disabled={loading}
-                  className="group flex w-full items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-4 text-left opacity-80 transition hover:opacity-100"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                    <MessageSquare className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium">Text me a code</div>
-                    <div className="text-xs text-muted-foreground">
-                      SMS provider not configured yet
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setStep("credentials")}
-                  className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" /> Back
-                </button>
-              </motion.div>
             )}
 
             {step === "otp" && (
@@ -388,12 +317,12 @@ function LoginPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setStep("channel");
+                      setStep("credentials");
                       setCode("");
                     }}
                     className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
                   >
-                    <ArrowLeft className="h-3.5 w-3.5" /> Change method
+                    <ArrowLeft className="h-3.5 w-3.5" /> Back
                   </button>
                   <button
                     type="button"
