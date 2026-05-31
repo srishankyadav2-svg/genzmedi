@@ -1,37 +1,69 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, HeartPulse, Mail, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  HeartPulse,
+  Lock,
+  Mail,
+  MessageSquare,
+  Phone,
+  ShieldCheck,
+  User,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { toast } from "sonner";
-import { sendLoginOtp, verifyLoginOtp } from "@/lib/auth";
+import {
+  identifierToAuthEmail,
+  isMfaVerified,
+  parseIdentifier,
+  requestEmailOtp,
+  setMfaVerified,
+  signInWithPassword,
+  verifyEmailOtp,
+  type Identifier,
+} from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Sign in — GenZ Medi" },
-      { name: "description", content: "Sign in to GenZ Medi with a secure one-time email code." },
+      {
+        name: "description",
+        content:
+          "Securely sign in to GenZ Medi with email or mobile, password, and a one-time verification code.",
+      },
     ],
   }),
   component: LoginPage,
 });
 
+type Step = "credentials" | "channel" | "otp";
+type Channel = "email" | "sms";
+
 function LoginPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<"email" | "otp">("email");
-  const [email, setEmail] = useState("");
+  const [step, setStep] = useState<Step>("credentials");
+  const [identifierRaw, setIdentifierRaw] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [identifier, setIdentifier] = useState<Identifier | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [channel, setChannel] = useState<Channel>("email");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
 
-  // If already signed in, jump straight to dashboard.
+  // Already signed in AND MFA passed → skip to dashboard.
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard" });
+      if (data.session && isMfaVerified()) navigate({ to: "/dashboard" });
     });
   }, [navigate]);
 
@@ -41,18 +73,47 @@ function LoginPage() {
     return () => clearTimeout(t);
   }, [resendIn]);
 
-  const validEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-
-  const onSendCode = async (e: FormEvent) => {
+  const onCredentials = async (e: FormEvent) => {
     e.preventDefault();
-    if (!validEmail(email)) {
-      toast.error("Please enter a valid email address");
+    const id = parseIdentifier(identifierRaw);
+    if (!id) {
+      toast.error("Enter a valid email or mobile number");
+      return;
+    }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
       return;
     }
     setLoading(true);
     try {
-      await sendLoginOtp(email.trim());
-      toast.success("Verification code sent", { description: `Check ${email} for a 6-digit code.` });
+      await signInWithPassword({ identifier: id, password });
+      setIdentifier(id);
+      setAuthEmail(identifierToAuthEmail(id));
+      // Default channel based on identifier type
+      setChannel(id.type === "email" ? "email" : "sms");
+      setStep("channel");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Invalid credentials";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onChooseChannel = async (chosen: Channel) => {
+    if (chosen === "sms") {
+      toast.info("SMS verification isn't set up yet", {
+        description: "Use email OTP for now, or ask your admin to configure an SMS provider.",
+      });
+      return;
+    }
+    setChannel(chosen);
+    setLoading(true);
+    try {
+      await requestEmailOtp(authEmail);
+      toast.success("Verification code sent", {
+        description: identifier?.type === "email" ? identifier.value : authEmail,
+      });
       setStep("otp");
       setResendIn(45);
     } catch (err) {
@@ -71,8 +132,9 @@ function LoginPage() {
     }
     setLoading(true);
     try {
-      await verifyLoginOtp(email.trim(), code);
-      toast.success("Welcome to GenZ Medi!");
+      await verifyEmailOtp(authEmail, code);
+      setMfaVerified();
+      toast.success("Welcome back!");
       navigate({ to: "/dashboard" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Invalid or expired code";
@@ -87,16 +149,46 @@ function LoginPage() {
     if (resendIn > 0) return;
     setLoading(true);
     try {
-      await sendLoginOtp(email.trim());
+      await requestEmailOtp(authEmail);
       toast.success("New code sent");
       setResendIn(45);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to resend code";
+      const msg = err instanceof Error ? err.message : "Failed to resend";
       toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
+
+  const identifierIcon =
+    identifierRaw.includes("@") ? (
+      <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    ) : /\d/.test(identifierRaw) ? (
+      <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    ) : (
+      <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    );
+
+  const heading =
+    step === "credentials"
+      ? "Welcome to GenZ Medi"
+      : step === "channel"
+      ? "Verify it's you"
+      : "Enter your code";
+
+  const subheading =
+    step === "credentials"
+      ? "Sign in with your email or mobile number."
+      : step === "channel"
+      ? "Choose how you'd like to receive your one-time code."
+      : (
+        <>
+          We sent a 6-digit code to{" "}
+          <span className="font-medium text-foreground">
+            {identifier?.type === "email" ? identifier.value : authEmail}
+          </span>
+        </>
+      );
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-soft p-4">
@@ -122,45 +214,62 @@ function LoginPage() {
             >
               <HeartPulse className="h-7 w-7 text-primary-foreground" />
             </motion.div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              {step === "email" ? "Welcome to GenZ Medi" : "Verify your email"}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {step === "email"
-                ? "Enter your email and we'll send you a secure 6-digit code."
-                : (
-                  <>We sent a code to <span className="font-medium text-foreground">{email}</span></>
-                )}
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">{heading}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{subheading}</p>
           </div>
 
           <AnimatePresence mode="wait">
-            {step === "email" ? (
+            {step === "credentials" && (
               <motion.form
-                key="email"
+                key="creds"
                 initial={{ opacity: 0, x: -16 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 16 }}
                 transition={{ duration: 0.2 }}
-                onSubmit={onSendCode}
+                onSubmit={onCredentials}
                 className="space-y-4"
               >
                 <div className="space-y-1.5">
-                  <Label htmlFor="email">Email address</Label>
+                  <Label htmlFor="identifier">Email or mobile number</Label>
                   <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    {identifierIcon}
                     <Input
-                      id="email"
-                      type="email"
-                      inputMode="email"
-                      autoComplete="email"
-                      placeholder="you@genzmedi.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      id="identifier"
+                      type="text"
+                      autoComplete="username"
+                      placeholder="you@genzmedi.com or +91 98xxxxxxxx"
+                      value={identifierRaw}
+                      onChange={(e) => setIdentifierRaw(e.target.value)}
                       className="pl-9 h-11"
                       disabled={loading}
                       required
                     />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type={showPwd ? "text" : "password"}
+                      autoComplete="current-password"
+                      placeholder="Your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-9 pr-10 h-11"
+                      disabled={loading}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPwd((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-muted-foreground hover:bg-muted"
+                      aria-label={showPwd ? "Hide password" : "Show password"}
+                    >
+                      {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
                 </div>
 
@@ -169,15 +278,77 @@ function LoginPage() {
                   disabled={loading}
                   className="h-11 w-full bg-gradient-hero text-primary-foreground shadow-glow transition-transform hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-70"
                 >
-                  {loading ? "Sending code..." : "Send verification code"}
+                  {loading ? "Checking..." : "Continue"}
                 </Button>
 
-                <p className="flex items-center justify-center gap-1.5 pt-2 text-center text-xs text-muted-foreground">
+                <p className="text-center text-sm text-muted-foreground">
+                  New to GenZ Medi?{" "}
+                  <Link to="/signup" className="font-medium text-primary hover:underline">
+                    Create an account
+                  </Link>
+                </p>
+
+                <p className="flex items-center justify-center gap-1.5 pt-1 text-center text-xs text-muted-foreground">
                   <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                  Passwordless, secure sign-in. No password needed.
+                  Two-step verification keeps your health data safe.
                 </p>
               </motion.form>
-            ) : (
+            )}
+
+            {step === "channel" && (
+              <motion.div
+                key="channel"
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -16 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-3"
+              >
+                <button
+                  type="button"
+                  onClick={() => onChooseChannel("email")}
+                  disabled={loading}
+                  className="group flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:bg-primary/5 disabled:opacity-60"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium">Email me a code</div>
+                    <div className="text-xs text-muted-foreground">
+                      {identifier?.type === "email" ? identifier.value : "Sent to your account email"}
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onChooseChannel("sms")}
+                  disabled={loading}
+                  className="group flex w-full items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-4 text-left opacity-80 transition hover:opacity-100"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <MessageSquare className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium">Text me a code</div>
+                    <div className="text-xs text-muted-foreground">
+                      SMS provider not configured yet
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStep("credentials")}
+                  className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back
+                </button>
+              </motion.div>
+            )}
+
+            {step === "otp" && (
               <motion.form
                 key="otp"
                 initial={{ opacity: 0, x: 16 }}
@@ -193,10 +364,7 @@ function LoginPage() {
                     value={code}
                     onChange={(v) => {
                       setCode(v);
-                      if (v.length === 6) {
-                        // auto-submit
-                        setTimeout(() => onVerify(), 50);
-                      }
+                      if (v.length === 6) setTimeout(() => onVerify(), 50);
                     }}
                     disabled={loading}
                   >
@@ -219,10 +387,13 @@ function LoginPage() {
                 <div className="flex items-center justify-between text-xs">
                   <button
                     type="button"
-                    onClick={() => { setStep("email"); setCode(""); }}
+                    onClick={() => {
+                      setStep("channel");
+                      setCode("");
+                    }}
                     className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
                   >
-                    <ArrowLeft className="h-3.5 w-3.5" /> Change email
+                    <ArrowLeft className="h-3.5 w-3.5" /> Change method
                   </button>
                   <button
                     type="button"

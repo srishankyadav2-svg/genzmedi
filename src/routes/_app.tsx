@@ -4,11 +4,15 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { TopNav } from "@/components/TopNav";
 import { supabase } from "@/integrations/supabase/client";
+import { isMfaVerified } from "@/lib/auth";
 
 export const Route = createFileRoute("/_app")({
   beforeLoad: async () => {
     const { data } = await supabase.auth.getSession();
     if (!data.session) {
+      throw redirect({ to: "/" });
+    }
+    if (typeof window !== "undefined" && !isMfaVerified()) {
       throw redirect({ to: "/" });
     }
   },
