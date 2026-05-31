@@ -15,18 +15,18 @@ export const Route = createFileRoute("/signup")({
       {
         name: "description",
         content:
-          "Create a GenZ Medi account with your email or mobile number. Protected by two-step verification.",
+          "Create a GenZ Medi account with your mobile number. Protected by SMS verification.",
       },
     ],
   }),
   component: SignupPage,
 });
 
-type Tab = "email" | "phone";
+type Tab = "phone" | "email";
 
 function SignupPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("email");
+  const [tab, setTab] = useState<Tab>("phone");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -42,19 +42,19 @@ function SignupPage() {
       return;
     }
     let identifier: Identifier;
-    if (tab === "email") {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-        toast.error("Enter a valid email address");
-        return;
-      }
-      identifier = { type: "email", value: email.trim().toLowerCase() };
-    } else {
+    if (tab === "phone") {
       const e164 = normalizePhone(phone);
       if (!e164) {
         toast.error("Enter a valid mobile number with country code");
         return;
       }
       identifier = { type: "phone", value: e164 };
+    } else {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        toast.error("Enter a valid email address");
+        return;
+      }
+      identifier = { type: "email", value: email.trim().toLowerCase() };
     }
     if (password.length < 8) {
       toast.error("Password must be at least 8 characters");
@@ -67,13 +67,13 @@ function SignupPage() {
     setLoading(true);
     try {
       await signUp({ identifier, password, fullName: fullName.trim() });
-      if (tab === "email") {
+      if (tab === "phone") {
         toast.success("Account created", {
-          description: "Check your email to confirm your address, then sign in.",
+          description: "Sign in with your mobile number and password. You'll receive an SMS code for verification.",
         });
       } else {
         toast.success("Account created", {
-          description: "Sign in with your mobile number and password.",
+          description: "Check your email to confirm your address, then sign in.",
         });
       }
       navigate({ to: "/" });
@@ -105,20 +105,11 @@ function SignupPage() {
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Create your account</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Sign up with email or mobile to get started.
+              Sign up with your mobile number or email to get started.
             </p>
           </div>
 
           <div className="mb-5 grid grid-cols-2 rounded-xl bg-muted p-1 text-sm">
-            <button
-              type="button"
-              onClick={() => setTab("email")}
-              className={`flex items-center justify-center gap-1.5 rounded-lg py-2 transition ${
-                tab === "email" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"
-              }`}
-            >
-              <Mail className="h-4 w-4" /> Email
-            </button>
             <button
               type="button"
               onClick={() => setTab("phone")}
@@ -127,6 +118,15 @@ function SignupPage() {
               }`}
             >
               <Phone className="h-4 w-4" /> Mobile
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("email")}
+              className={`flex items-center justify-center gap-1.5 rounded-lg py-2 transition ${
+                tab === "email" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"
+              }`}
+            >
+              <Mail className="h-4 w-4" /> Email
             </button>
           </div>
 
@@ -147,25 +147,7 @@ function SignupPage() {
               </div>
             </div>
 
-            {tab === "email" ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="email">Email address</Label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@genzmedi.com"
-                    className="pl-9 h-11"
-                    disabled={loading}
-                    required
-                  />
-                </div>
-              </div>
-            ) : (
+            {tab === "phone" ? (
               <div className="space-y-1.5">
                 <Label htmlFor="phone">Mobile number</Label>
                 <div className="relative">
@@ -184,9 +166,26 @@ function SignupPage() {
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Include country code. SMS verification will activate once your admin
-                  configures an SMS provider.
+                  Include country code. You'll receive an SMS verification code after creating your account.
                 </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email address</Label>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@genzmedi.com"
+                    className="pl-9 h-11"
+                    disabled={loading}
+                    required
+                  />
+                </div>
               </div>
             )}
 
@@ -251,7 +250,7 @@ function SignupPage() {
 
             <p className="flex items-center justify-center gap-1.5 pt-1 text-center text-xs text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-              Protected by two-step verification.
+              Protected by SMS verification.
             </p>
           </form>
         </div>
