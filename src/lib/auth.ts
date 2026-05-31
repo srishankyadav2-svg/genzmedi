@@ -33,6 +33,10 @@ function identifierToAuthEmail(id: Identifier): string {
   return id.type === "email" ? id.value : phoneToSyntheticEmail(id.value);
 }
 
+export function identifierToPhoneNumber(id: Identifier): string | null {
+  return id.type === "phone" ? id.value : null;
+}
+
 // ---------- SIGN UP ----------
 export async function signUp(params: {
   identifier: Identifier;
@@ -71,8 +75,30 @@ export async function signInWithPassword(params: {
 }
 
 // ---------- OTP STEP (step 2) ----------
-// Strategy: after password verification, sign out, then request an email OTP
+// Strategy: after password verification, sign out, then request a mobile OTP
 // for the same account. Verifying the OTP creates the real session.
+
+export async function requestMobileOtp(phoneNumber: string) {
+  // Tear down the temporary password session — OTP verification re-creates one.
+  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signInWithOtp({
+    phone: phoneNumber,
+    options: { shouldCreateUser: false },
+  });
+  if (error) throw error;
+}
+
+export async function verifyMobileOtp(phoneNumber: string, token: string) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    phone: phoneNumber,
+    token,
+    type: "sms",
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Legacy email OTP functions (kept for backward compatibility, but deprecated)
 export async function requestEmailOtp(authEmail: string) {
   // Tear down the temporary password session — OTP verification re-creates one.
   await supabase.auth.signOut();
