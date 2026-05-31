@@ -14,32 +14,74 @@ export type Database = {
   }
   public: {
     Tables: {
+      otp_codes: {
+        Row: {
+          attempts: number
+          channel: string
+          code_hash: string
+          consumed_at: string | null
+          created_at: string
+          destination: string
+          expires_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          channel: string
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          destination: string
+          expires_at: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          channel?: string
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          destination?: string
+          expires_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
           email: string | null
+          email_verified: boolean
           full_name: string | null
           id: string
           phone: string | null
+          phone_verified: boolean
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
           email?: string | null
+          email_verified?: boolean
           full_name?: string | null
           id: string
           phone?: string | null
+          phone_verified?: boolean
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
           email?: string | null
+          email_verified?: boolean
           full_name?: string | null
           id?: string
           phone?: string | null
+          phone_verified?: boolean
           updated_at?: string
         }
         Relationships: []
