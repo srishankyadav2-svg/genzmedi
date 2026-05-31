@@ -1,6 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const PHONE_EMAIL_DOMAIN = "phone.genzmedi.local";
 const MFA_FLAG = "genzmedi_mfa_verified";
 
 export type Identifier =
@@ -14,12 +13,6 @@ export function normalizePhone(raw: string): string {
   return digits.length >= 8 ? `+${digits}` : "";
 }
 
-export function phoneToSyntheticEmail(phoneE164: string) {
-  // Strip the leading + so it's a valid local-part
-  const local = phoneE164.replace(/^\+/, "");
-  return `${local}@${PHONE_EMAIL_DOMAIN}`;
-}
-
 export function parseIdentifier(raw: string): Identifier | null {
   const v = raw.trim();
   if (!v) return null;
@@ -27,10 +20,6 @@ export function parseIdentifier(raw: string): Identifier | null {
   const phone = normalizePhone(v);
   if (phone) return { type: "phone", value: phone };
   return null;
-}
-
-function identifierToAuthEmail(id: Identifier): string {
-  return id.type === "email" ? id.value : phoneToSyntheticEmail(id.value);
 }
 
 export function identifierToPhoneNumber(id: Identifier): string | null {
@@ -43,21 +32,37 @@ export async function signUp(params: {
   password: string;
   fullName: string;
 }) {
-  const email = identifierToAuthEmail(params.identifier);
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password: params.password,
-    options: {
-      emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
-      data: {
-        full_name: params.fullName,
-        phone: params.identifier.type === "phone" ? params.identifier.value : "",
-        identifier_type: params.identifier.type,
+  // For mobile, use phone-based sign up
+  if (params.identifier.type === "phone") {
+    const { data, error } = await supabase.auth.signUp({
+      phone: params.identifier.value,
+      password: params.password,
+      options: {
+        data: {
+          full_name: params.fullName,
+          phone: params.identifier.value,
+          identifier_type: "phone",
+        },
       },
-    },
-  });
-  if (error) throw error;
-  return data;
+    });
+    if (error) throw error;
+    return data;
+  } else {
+    // For email, use email-based sign up
+    const { data, error } = await supabase.auth.signUp({
+      email: params.identifier.value,
+      password: params.password,
+      options: {
+        emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+        data: {
+          full_name: params.fullName,
+          identifier_type: "email",
+        },
+      },
+    });
+    if (error) throw error;
+    return data;
+  }
 }
 
 // ---------- PASSWORD SIGN IN (step 1) ----------
@@ -65,13 +70,23 @@ export async function signInWithPassword(params: {
   identifier: Identifier;
   password: string;
 }) {
-  const email = identifierToAuthEmail(params.identifier);
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password: params.password,
-  });
-  if (error) throw error;
-  return data;
+  // For mobile, use phone-based sign in
+  if (params.identifier.type === "phone") {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      phone: params.identifier.value,
+      password: params.password,
+    });
+    if (error) throw error;
+    return data;
+  } else {
+    // For email, use email-based sign in
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: params.identifier.value,
+      password: params.password,
+    });
+    if (error) throw error;
+    return data;
+  }
 }
 
 // ---------- OTP STEP (step 2) ----------
@@ -154,5 +169,3 @@ export function isMfaVerified(): boolean {
     return false;
   }
 }
-
-export { identifierToAuthEmail };
