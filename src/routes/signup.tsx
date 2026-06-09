@@ -66,15 +66,12 @@ function SignupPage() {
     setLoading(true);
     try {
       await signUp({ identifier, password, fullName: fullName.trim() });
-      if (tab === "phone") {
-        toast.success("Account created", {
-          description: "Sign in with your mobile number and password. You'll receive an SMS code for verification.",
-        });
-      } else {
-        toast.success("Account created", {
-          description: "Check your email to confirm your address, then sign in.",
-        });
-      }
+      toast.success("Account created", {
+        description:
+          tab === "email"
+            ? "Check your email to confirm your address, then sign in."
+            : "You can now sign in with your mobile number and password.",
+      });
       navigate({ to: "/" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Could not create account";
