@@ -14,8 +14,7 @@ export const Route = createFileRoute("/signup")({
       { title: "Create your account — GenZ Medi" },
       {
         name: "description",
-        content:
-          "Create a GenZ Medi account with your mobile number. Protected by SMS verification.",
+        content: "Create a GenZ Medi account with your mobile number or email.",
       },
     ],
   }),
@@ -67,15 +66,12 @@ function SignupPage() {
     setLoading(true);
     try {
       await signUp({ identifier, password, fullName: fullName.trim() });
-      if (tab === "phone") {
-        toast.success("Account created", {
-          description: "Sign in with your mobile number and password. You'll receive an SMS code for verification.",
-        });
-      } else {
-        toast.success("Account created", {
-          description: "Check your email to confirm your address, then sign in.",
-        });
-      }
+      toast.success("Account created", {
+        description:
+          tab === "email"
+            ? "Check your email to confirm your address, then sign in."
+            : "You can now sign in with your mobile number and password.",
+      });
       navigate({ to: "/" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Could not create account";
@@ -166,7 +162,7 @@ function SignupPage() {
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Include country code. You'll receive an SMS verification code after creating your account.
+                  Include country code (e.g., +91 for India).
                 </p>
               </div>
             ) : (
@@ -250,7 +246,7 @@ function SignupPage() {
 
             <p className="flex items-center justify-center gap-1.5 pt-1 text-center text-xs text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-              Protected by SMS verification.
+              Your data is securely encrypted.
             </p>
           </form>
         </div>
