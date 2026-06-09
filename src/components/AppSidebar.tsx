@@ -24,7 +24,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { signOut } from "@/lib/auth";
+import { logout } from "@/lib/auth";
 import { toast } from "sonner";
 
 const items = [
@@ -103,8 +103,8 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip="Log out"
-              onClick={async () => {
-                await signOut();
+              onClick={() => {
+                logout();
                 toast.success("Logged out");
                 navigate({ to: "/" });
               }}

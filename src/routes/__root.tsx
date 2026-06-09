@@ -68,14 +68,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "GenZ Medi — Modern healthcare for everyone" },
       { name: "description", content: "GenZ Medi is a modern healthcare platform to manage appointments, medicines, reports, and doctors in one place." },
-      { property: "og:title", content: "GenZ Medi — Modern healthcare for everyone" },
-      { property: "og:description", content: "GenZ Medi is a modern healthcare platform to manage appointments, medicines, reports, and doctors in one place." },
+      { property: "og:title", content: "GenZ Medi" },
+      { property: "og:description", content: "Modern healthcare for everyone." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "GenZ Medi — Modern healthcare for everyone" },
-      { name: "twitter:description", content: "GenZ Medi is a modern healthcare platform to manage appointments, medicines, reports, and doctors in one place." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/86ca39c6-157f-48a6-960a-1f31c88c7911/id-preview-0f859631--79accd78-b3dd-445f-bf67-d50c18faf293.lovable.app-1780154567769.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/86ca39c6-157f-48a6-960a-1f31c88c7911/id-preview-0f859631--79accd78-b3dd-445f-bf67-d50c18faf293.lovable.app-1780154567769.png" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
@@ -99,16 +95,6 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const router = useRouter();
-  useEffect(() => {
-    import("@/integrations/supabase/client").then(({ supabase }) => {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-        router.invalidate();
-        queryClient.invalidateQueries();
-      });
-      return () => subscription.unsubscribe();
-    });
-  }, [router, queryClient]);
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
