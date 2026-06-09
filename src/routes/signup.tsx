@@ -246,7 +246,7 @@ function SignupPage() {
 
             <p className="flex items-center justify-center gap-1.5 pt-1 text-center text-xs text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-              Protected by SMS verification.
+              Your data is securely encrypted.
             </p>
           </form>
         </div>
