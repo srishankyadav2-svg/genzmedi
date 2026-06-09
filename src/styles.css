@@ -131,6 +131,7 @@
 @layer utilities {
   .bg-gradient-hero { background-image: var(--gradient-hero); }
   .bg-gradient-soft { background-image: var(--gradient-soft); }
+  .bg-gradient-brand { background-image: var(--gradient-brand); }
   .shadow-glow { box-shadow: var(--shadow-glow); }
   .shadow-card { box-shadow: var(--shadow-card); }
   .glass {
