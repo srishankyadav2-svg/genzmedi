@@ -162,7 +162,7 @@ function SignupPage() {
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Include country code. You'll receive an SMS verification code after creating your account.
+                  Include country code (e.g., +91 for India).
                 </p>
               </div>
             ) : (
