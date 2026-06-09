@@ -14,8 +14,7 @@ export const Route = createFileRoute("/signup")({
       { title: "Create your account — GenZ Medi" },
       {
         name: "description",
-        content:
-          "Create a GenZ Medi account with your mobile number. Protected by SMS verification.",
+        content: "Create a GenZ Medi account with your mobile number or email.",
       },
     ],
   }),
