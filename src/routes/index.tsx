@@ -37,24 +37,30 @@ function LoginPage() {
       toast.error("Please fill in all fields");
       return;
     }
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
       return;
     }
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    login();
     toast.success("Welcome back!");
     navigate({ to: "/dashboard" });
   };
 
-  const onGoogle = () => {
+  const onGoogle = async () => {
     setLoading(true);
-    setTimeout(() => {
-      login();
-      toast.success("Signed in with Google");
-      navigate({ to: "/dashboard" });
-    }, 500);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/dashboard` },
+    });
+    if (error) {
+      setLoading(false);
+      toast.error(error.message);
+    }
   };
 
   const stats = [
