@@ -1,54 +1,91 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Lock, Mail, ShieldCheck, Activity } from "lucide-react";
+import { Activity, Eye, EyeOff, Lock, Mail, Phone, ShieldCheck, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
-      { title: "Sign in — GenZ Medi" },
-      { name: "description", content: "Sign in to GenZ Medi to manage your healthcare." },
+      { title: "Create your account — GenZ Medi" },
+      { name: "description", content: "Join GenZ Medi — modern, secure healthcare built for you." },
     ],
   }),
-  component: LoginPage,
+  component: SignupPage,
 });
 
 const NAVY = "#080D24";
 const NAVY_2 = "#121A3A";
 const TEAL = "#00D4B4";
 
-function LoginPage() {
+const signupSchema = z.object({
+  fullName: z.string().trim().min(2, "Enter your full name").max(100),
+  email: z.string().trim().email("Enter a valid email").max(255),
+  phone: z
+    .string()
+    .trim()
+    .max(20)
+    .optional()
+    .or(z.literal("")),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(72, "Password is too long"),
+});
+
+function SignupPage() {
   const navigate = useNavigate();
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
-  const [keep, setKeep] = useState(true);
+  const [agree, setAgree] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      toast.error("Please fill in all fields");
+    if (!agree) {
+      toast.error("Please accept the Terms & Privacy Policy");
       return;
     }
+    const parsed = signupSchema.safeParse({ fullName, email, phone, password });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Invalid input");
+      return;
+    }
+
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
+    const { data, error } = await supabase.auth.signUp({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/dashboard`,
+        data: {
+          full_name: parsed.data.fullName,
+          phone: parsed.data.phone || null,
+        },
+      },
     });
     setLoading(false);
+
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success("Welcome back!");
-    navigate({ to: "/dashboard" });
+    if (data.session) {
+      toast.success("Welcome to GenZ Medi!");
+      navigate({ to: "/dashboard" });
+    } else {
+      toast.success("Check your email to confirm your account");
+      navigate({ to: "/" });
+    }
   };
 
   const onGoogle = async () => {
@@ -63,15 +100,15 @@ function LoginPage() {
     }
   };
 
-  const stats = [
-    { label: "50K+", sub: "Patients" },
-    { label: "4.9★", sub: "Rating" },
-    { label: "< 2 min", sub: "Wait time" },
+  const benefits = [
+    { label: "Free", sub: "to join" },
+    { label: "24/7", sub: "Care access" },
+    { label: "HIPAA", sub: "Aligned" },
   ];
 
   return (
     <div
-      className="min-h-screen w-full font-sans text-white"
+      className="min-h-screen w-full text-white"
       style={{ fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}
     >
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-2">
@@ -80,7 +117,6 @@ function LoginPage() {
           className="relative flex flex-col justify-between overflow-hidden px-6 py-8 sm:px-10 lg:px-14 lg:py-14"
           style={{ backgroundColor: NAVY }}
         >
-          {/* pulsing radial glow */}
           <motion.div
             aria-hidden
             className="pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
@@ -98,7 +134,6 @@ function LoginPage() {
             }}
           />
 
-          {/* logo */}
           <div className="relative flex items-center gap-2.5">
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl shadow-lg"
@@ -111,7 +146,6 @@ function LoginPage() {
             </span>
           </div>
 
-          {/* headline */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -119,17 +153,16 @@ function LoginPage() {
             className="relative my-10 lg:my-0"
           >
             <h1 className="text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
-              Your health,
+              Start your
               <br />
-              <span style={{ color: TEAL }}>your way.</span>
+              <span style={{ color: TEAL }}>care journey.</span>
             </h1>
             <p className="mt-5 max-w-md text-sm text-white/65 sm:text-base">
-              Book doctors, track prescriptions, and access your medical records — all in one secure, modern platform built for the next generation.
+              Create your free GenZ Medi account in seconds — book doctors, manage prescriptions, and keep every record in one secure place.
             </p>
 
-            {/* stat pills */}
             <div className="mt-7 flex flex-wrap gap-2.5">
-              {stats.map((s) => (
+              {benefits.map((s) => (
                 <div
                   key={s.sub}
                   className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs backdrop-blur-sm sm:text-sm"
@@ -151,7 +184,6 @@ function LoginPage() {
           className="relative flex items-center justify-center px-6 py-10 sm:px-10 lg:px-14"
           style={{ backgroundColor: NAVY_2 }}
         >
-          {/* top teal accent */}
           <div
             className="absolute inset-x-0 top-0 h-px"
             style={{ background: `linear-gradient(90deg, transparent, ${TEAL}, transparent)` }}
@@ -163,19 +195,14 @@ function LoginPage() {
             transition={{ duration: 0.5, ease: "easeOut" }}
             className="w-full max-w-md"
           >
-            <h2 className="text-3xl font-bold tracking-tight">Welcome back</h2>
+            <h2 className="text-3xl font-bold tracking-tight">Create your account</h2>
             <p className="mt-1.5 text-sm text-white/55">
-              New here?{" "}
-              <Link
-                to="/signup"
-                className="font-medium hover:underline"
-                style={{ color: TEAL }}
-              >
-                Create a free account
+              Already a member?{" "}
+              <Link to="/" className="font-medium hover:underline" style={{ color: TEAL }}>
+                Sign in instead
               </Link>
             </p>
 
-            {/* Google */}
             <Button
               type="button"
               onClick={onGoogle}
@@ -185,32 +212,45 @@ function LoginPage() {
               <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.4-1.6 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.3 14.6 2.3 12 2.3 6.7 2.3 2.4 6.6 2.4 12s4.3 9.7 9.6 9.7c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.6H12z" />
               </svg>
-              Continue with Google
+              Sign up with Google
             </Button>
 
-            {/* divider */}
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t border-white/10" />
               </div>
               <div className="relative flex justify-center">
                 <span className="px-3 text-xs uppercase tracking-wider text-white/40" style={{ backgroundColor: NAVY_2 }}>
-                  or sign in with email
+                  or sign up with email
                 </span>
               </div>
             </div>
 
             <form onSubmit={onSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-xs font-medium text-white/70">
-                  Email or phone number
-                </Label>
-                <div className="relative group">
+                <Label htmlFor="fullName" className="text-xs font-medium text-white/70">Full name</Label>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                  <Input
+                    id="fullName"
+                    type="text"
+                    autoComplete="name"
+                    placeholder="Jane Doe"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="h-11 border-white/10 bg-white/[0.04] pl-9 text-white placeholder:text-white/35 focus-visible:border-[#00D4B4] focus-visible:ring-2 focus-visible:ring-[#00D4B4]/30"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs font-medium text-white/70">Email</Label>
+                <div className="relative">
                   <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                   <Input
                     id="email"
-                    type="text"
-                    autoComplete="username"
+                    type="email"
+                    autoComplete="email"
                     placeholder="you@genzmedi.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -220,16 +260,32 @@ function LoginPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-xs font-medium text-white/70">
-                  Password
+                <Label htmlFor="phone" className="text-xs font-medium text-white/70">
+                  Phone <span className="text-white/40">(optional)</span>
                 </Label>
+                <div className="relative">
+                  <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                  <Input
+                    id="phone"
+                    type="tel"
+                    autoComplete="tel"
+                    placeholder="+1 555 123 4567"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="h-11 border-white/10 bg-white/[0.04] pl-9 text-white placeholder:text-white/35 focus-visible:border-[#00D4B4] focus-visible:ring-2 focus-visible:ring-[#00D4B4]/30"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-xs font-medium text-white/70">Password</Label>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                   <Input
                     id="password"
                     type={show ? "text" : "password"}
-                    autoComplete="current-password"
-                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    placeholder="At least 8 characters"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11 border-white/10 bg-white/[0.04] pl-9 pr-10 text-white placeholder:text-white/35 focus-visible:border-[#00D4B4] focus-visible:ring-2 focus-visible:ring-[#00D4B4]/30"
@@ -243,25 +299,19 @@ function LoginPage() {
                     {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={() => toast.info("Password reset link sent")}
-                    className="text-xs font-medium hover:underline"
-                    style={{ color: TEAL }}
-                  >
-                    Forgot password?
-                  </button>
-                </div>
               </div>
 
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-white/70">
+              <label className="flex cursor-pointer items-start gap-2 text-sm text-white/70">
                 <Checkbox
-                  checked={keep}
-                  onCheckedChange={(v) => setKeep(!!v)}
-                  className="border-white/20 data-[state=checked]:border-[#00D4B4] data-[state=checked]:bg-[#00D4B4] data-[state=checked]:text-[#080D24]"
+                  checked={agree}
+                  onCheckedChange={(v) => setAgree(!!v)}
+                  className="mt-0.5 border-white/20 data-[state=checked]:border-[#00D4B4] data-[state=checked]:bg-[#00D4B4] data-[state=checked]:text-[#080D24]"
                 />
-                Keep me signed in for 30 days
+                <span>
+                  I agree to the{" "}
+                  <a href="#" className="underline hover:text-white">Terms</a> &{" "}
+                  <a href="#" className="underline hover:text-white">Privacy Policy</a>
+                </span>
               </label>
 
               <Button
@@ -274,19 +324,13 @@ function LoginPage() {
                   boxShadow: `0 10px 28px ${TEAL}40`,
                 }}
               >
-                {loading ? "Signing in..." : "Sign in to GenZ Medi"}
+                {loading ? "Creating account..." : "Create your GenZ Medi account"}
               </Button>
 
               <div className="flex items-center justify-center gap-1.5 text-xs text-white/45">
                 <ShieldCheck className="h-3.5 w-3.5" style={{ color: TEAL }} />
                 256-bit encrypted & HIPAA-aligned
               </div>
-
-              <p className="pt-2 text-center text-[11px] text-white/40">
-                By continuing you agree to our{" "}
-                <a href="#" className="underline hover:text-white/70">Terms</a> &{" "}
-                <a href="#" className="underline hover:text-white/70">Privacy Policy</a>.
-              </p>
             </form>
           </motion.div>
         </section>
