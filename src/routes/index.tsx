@@ -166,14 +166,13 @@ function LoginPage() {
             <h2 className="text-3xl font-bold tracking-tight">Welcome back</h2>
             <p className="mt-1.5 text-sm text-white/55">
               New here?{" "}
-              <button
-                type="button"
-                onClick={() => toast.info("Sign-up coming soon")}
+              <Link
+                to="/signup"
                 className="font-medium hover:underline"
                 style={{ color: TEAL }}
               >
                 Create a free account
-              </button>
+              </Link>
             </p>
 
             {/* Google */}
