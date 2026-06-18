@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -53,14 +54,17 @@ function LoginPage() {
 
   const onGoogle = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
     });
-    if (error) {
+    if (result.error) {
       setLoading(false);
-      toast.error(error.message);
+      toast.error(result.error.message ?? "Google sign-in failed");
+      return;
     }
+    if (result.redirected) return;
+    toast.success("Welcome!");
+    navigate({ to: "/dashboard" });
   };
 
   const stats = [
